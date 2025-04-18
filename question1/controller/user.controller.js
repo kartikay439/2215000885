@@ -1,63 +1,86 @@
 import axios from 'axios'
 
 const link = 'http://20.244.56.144/evaluation-service'
+const t1 = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJNYXBDbGFpbXMiOnsiZXhwIjoxNzQ0OTYzMjgzLCJpYXQiOjE3NDQ5NjI5ODMsImlzcyI6IkFmZm9yZG1lZCIsImp0aSI6ImY1YWUwNGE4LTFhNzgtNDc0Mi04NGE0LWYxZGViYTAxMmUwMiIsInN1YiI6ImthcnRpa2F5LnRyaXZlZGlfY3MyMkBnbGEuYWMuaW4ifSwiZW1haWwiOiJrYXJ0aWtheS50cml2ZWRpX2NzMjJAZ2xhLmFjLmluIiwibmFtZSI6ImthcnRpa2F5IHRyaXZlZGkiLCJyb2xsTm8iOiIyMjE1MDAwODg1IiwiYWNjZXNzQ29kZSI6IkNObmVHVCIsImNsaWVudElEIjoiZjVhZTA0YTgtMWE3OC00NzQyLTg0YTQtZjFkZWJhMDEyZTAyIiwiY2xpZW50U2VjcmV0IjoiZ2hCYkVwdWh3emRmUHZ1UiJ9.thSqZg-W-261J6LicAAAC1TrMebrFWIJTIgpX7xfomo"
 
-function getTopUsers(req, res) {
 
-    const t1 = Date.now()
+const API_URL = 'http://20.244.56.144/evaluation-service/users';
+const AUTH_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJNYXBDbGFpbXMiOnsiZXhwIjoxNzQ0OTY0NDAzLCJpYXQiOjE3NDQ5NjQxMDMsImlzcyI6IkFmZm9yZG1lZCIsImp0aSI6ImY1YWUwNGE4LTFhNzgtNDc0Mi04NGE0LWYxZGViYTAxMmUwMiIsInN1YiI6ImthcnRpa2F5LnRyaXZlZGlfY3MyMkBnbGEuYWMuaW4ifSwiZW1haWwiOiJrYXJ0aWtheS50cml2ZWRpX2NzMjJAZ2xhLmFjLmluIiwibmFtZSI6ImthcnRpa2F5IHRyaXZlZGkiLCJyb2xsTm8iOiIyMjE1MDAwODg1IiwiYWNjZXNzQ29kZSI6IkNObmVHVCIsImNsaWVudElEIjoiZjVhZTA0YTgtMWE3OC00NzQyLTg0YTQtZjFkZWJhMDEyZTAyIiwiY2xpZW50U2VjcmV0IjoiZ2hCYkVwdWh3emRmUHZ1UiJ9.xPoRBDp2fk1IKaFxHxEJ1j7tcvMaN8pMAMNvEgybZvQ'; // Replace this with your actual token
 
-    axios.get(link + '/users').then(r => {
-        const u = r.data.users
-        const arr = []
-
-        const ids = Object.keys(u)
-
-        let i = 0
-
-        function loopUser() {
-            if (i >= ids.length) {
-                arr.sort((a, b) => b.totalComments - a.totalComments)
-                res.json({
-                    topUsers: arr.slice(0, 5),
-                    executionTime: (Date.now() - t1) + 'ms'
-                })
-                return
+async function getUserNoSorting(req, res) {
+    try {
+        const response = await axios.get(API_URL, {
+            headers: {
+                Authorization: `Bearer ${AUTH_TOKEN}`
             }
+        });
 
-            const id = ids[i]
-            axios.get(link + '/users/' + id + '/posts').then(p => {
-                const posts = p.data.posts
-                let count = 0
-                let j = 0
-
-                function loopPost() {
-                    if (j >= posts.length) {
-                        arr.push({
-                            id: id,
-                            name: u[id],
-                            totalComments: count,
-                            postCount: posts.length
-                        })
-                        i++
-                        loopUser()
-                        return
-                    }
-
-                    const pid = posts[j].id
-                    axios.get(link + '/posts/' + pid + '/comments').then(c => {
-                        count += c.data.comments.length
-                        j++
-                        loopPost()
-                    })
-                }
-
-                loopPost()
-            })
-        }
-
-        loopUser()
-    })
+        console.log('Users:', response.data);
+        res.json(response.data);
+    } catch (error) {
+        console.error('Error fetching users:', error.response ? error.response.data : error.message);
+    }
 }
+
+
+const axios = require('axios');
+const link = 'http://20.244.56.144/evaluation-service';
+
+const api = axios.create({
+    baseURL: link,
+    headers: {
+        Authorization: AUTH_TOKEN,
+    }
+});
+
+async function getTopUsers(req, res) {
+    const t1 = Date.now();
+
+
+    try {
+        //gettin all user
+        const userRes = await api.get('/users');
+        const users = userRes.data.users;
+        const ids = Object.keys(users);
+
+        //getting post and fetch fro evry usr
+        const userStats = await Promise.all(ids.map(async (id) => {
+            const postsRes = await api.get(`/users/${id}/posts`);
+            const posts = postsRes.data.posts;
+
+            //getting total comments across all post
+            const commentCounts = await Promise.all(posts.map(async (post) => {
+                const commentsRes = await api.get(`/posts/${post.id}/comments`);
+                return commentsRes.data.comments.length;
+            }));
+
+            const totalComments = commentCounts.reduce((a, b) => a + b, 0);
+
+            return {
+                id,
+                name: users[id],
+                totalComments,
+                postCount: posts.length
+            };
+        }));
+
+        userStats.sort((a, b) => b.totalComments - a.totalComments);
+        const topUsers = userStats.slice(0, 5);
+
+        res.json({
+            topUsers,
+            executionTime: `${Date.now() - t1}ms`
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({
+            error: 'Something went wrong',
+            details: err.message
+        });
+    }
+}
+
 
 function getPosts(req, res) {
 
@@ -80,7 +103,7 @@ function getPosts(req, res) {
                         p.userName = u[p.userid]
                         return p
                     })
-                    res.json({ posts: lst, executionTime: (Date.now() - t2) + 'ms' })
+                    res.json({posts: lst, executionTime: (Date.now() - t2) + 'ms'})
                 } else {
                     let mx = 0
                     const newPosts = []
@@ -89,7 +112,7 @@ function getPosts(req, res) {
                     function loopP() {
                         if (j >= all.length) {
                             const f = newPosts.filter(p => p.commentCount === mx)
-                            res.json({ posts: f, executionTime: (Date.now() - t2) + 'ms' })
+                            res.json({posts: f, executionTime: (Date.now() - t2) + 'ms'})
                             return
                         }
 
@@ -126,5 +149,6 @@ function getPosts(req, res) {
 
 export {
     getTopUsers,
-    getPosts
+    getPosts,
+    getUserNoSorting
 }

@@ -1,12 +1,11 @@
-const express = require('express');
-const controllers = require('../controller/user.controller');
-
-const router = express.Router();
-
+import {Router} from 'express';
+import {getUserNoSorting,getPosts,getTopUsers} from '../controller/user.controller.js';
+const router = Router();
 
 
-router.get('/users', controllers.getTopUsers);
 
-router.get('/posts', controllers.getPosts);
+router.get('/users', getTopUsers);
+
+router.get('/posts', getPosts);
 
 export default router;
